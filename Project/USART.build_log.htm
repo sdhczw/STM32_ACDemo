@@ -1,0 +1,51 @@
+<html>
+<body>
+<pre>
+<h1>礦ision Build Log</h1>
+<h2>Project:</h2>
+E:\YZH\STM32Works\USART\Project\USART.uvproj
+Project File Date:  09/03/2014
+
+<h2>Output:</h2>
+Build target 'Target 1'
+compiling usart.c...
+..\User\usart.c(14): warning:  #177-D: variable "t" was declared but never referenced
+        u8 t;
+..\User\usart.c(15): warning:  #177-D: variable "len" was declared but never referenced
+        u8 len; 
+..\User\usart.c(16): warning:  #177-D: variable "times" was declared but never referenced
+        u16 times=0; 
+..\User\usart.c(82): warning:  #550-D: variable "USART_RX_BUF" was set but never used
+                u8 USART_RX_BUF[USART_REC_LEN];     //接收缓冲,最大USART_REC_LEN个字节.
+..\User\usart.c: 4 warnings, 0 errors
+linking...
+..\Object\USART.axf: Error: L6200E: Symbol __ARM_use_no_argv multiply defined (by usart.o and main.o).
+..\Object\USART.axf: Error: L6200E: Symbol NVIC_Configuration multiply defined (by usart.o and main.o).
+..\Object\USART.axf: Error: L6200E: Symbol main multiply defined (by usart.o and main.o).
+Not enough information to list image symbols.
+Not enough information to list the image map.
+Finished: 2 information, 0 warning and 3 error messages.
+"..\Object\USART.axf" - 3 Error(s), 4 Warning(s).
+Target not created
+</pre>
+</body>
+</html>
+
+compiling stm32f10x_rtc.c...
+compiling stm32f10x_sdio.c...
+compiling stm32f10x_spi.c...
+compiling stm32f10x_tim.c...
+compiling stm32f10x_usart.c...
+compiling stm32f10x_wwdg.c...
+compiling core_cm3.c...
+compiling system_stm32f10x.c...
+assembling startup_stm32f10x_md.s...
+linking...
+..\Object\USART.axf: Error: L6200E: Symbol __ARM_use_no_argv multiply defined (by usart.o and main.o).
+..\Object\USART.axf: Error: L6200E: Symbol NVIC_Configuration multiply defined (by usart.o and main.o).
+..\Object\USART.axf: Error: L6200E: Symbol main multiply defined (by usart.o and main.o).
+Not enough information to list image symbols.
+Not enough information to list the image map.
+Finished: 2 information, 0 warning and 3 error messages.
+"..\Object\USART.axf" - 3 Error(s), 4 Warning(s).
+Target not created
