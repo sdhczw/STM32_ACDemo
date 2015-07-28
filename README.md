@@ -2,6 +2,7 @@
 功能：通过AblCloud的demo程序实现远程点灯功能
 
 修改记录：
+
 v1.0.4 2015.07.14
 1.在ac_api.c增加 AC_SendRebootMsg，用于ota_confirm消息确认之后重启wifi。
 
@@ -14,8 +15,8 @@ typedef struct
     AC_RegisterReq struRegReq;
 }AC_ExtRegisterReq;
 2.在ac_hal,c 中增加通过mac地址注册函数，这个函数的作用是通过WIFIMAC地址作为设备ID注册信息
-v1.0.2  2015.06.19
 
+v1.0.2  2015.06.19
 1.增加扩展设备注册消息，用于支持设备统一入库
 2.删除无效代码
 
