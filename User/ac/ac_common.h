@@ -15,7 +15,8 @@
 
 typedef signed   char                       s8;                                 
 typedef signed   short                      s16;                                
-typedef signed   int                        s32;                                
+typedef signed   int                        s32;
+typedef signed long long                    s64; 
 typedef unsigned char                       u8;                                 
 typedef unsigned short                      u16;                                
 typedef unsigned int                        u32; 
@@ -44,7 +45,7 @@ u16 AC_NtoHs(u16 n);
 #define AC_HTONS(n) AC_HtoNs(n)
 #define AC_HTONL(n) AC_HtoNl(n)
 #define AC_HTONLU64(n) AC_HtoNlu64(n)
-
+s32 AC_checkCPUendian(void);
 
 #endif
 /******************************* FILE END ***********************************/

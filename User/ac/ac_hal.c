@@ -9,17 +9,18 @@
 */
 
 #include <ac_common.h>
+#include <stm32f10x.h>
 #include <ac_protocol_interface.h>
 #include <ac_api.h>
 #include <ac_hal.h>
 #include <ac_cfg.h>
-//#include "utils/uartstdio.h"
-
+#include <ac_klv.h>
+#include "cJSON.h"
 #include "usart2.h"	  
 #include "led.h"	  
 #include "stm32f10x.h"
 #include <stdio.h>
-
+#include <stdlib.h>
 u8  g_u8EqVersion[AC_EQVERSION_LEN]={0,0,0,0};      
 u8  g_u8ModuleKey[AC_MODULE_KEY_LEN] = DEFAULT_IOT_PRIVATE_KEY;
 u64  g_u64Domain = ((((u64)MAJOR_DOMAIN_ID)<<16) + (u64)SUB_DOMAIN_ID) ;
@@ -28,13 +29,34 @@ u32 g_u32CloudStatus = CLOUDDISCONNECT;
 typedef struct tag_STRU_LED_ONOFF
 {		
     u8	     u8LedOnOff ; // 0:关，1：开，2：获取当前开关状态
-    u8	     u8Pad[3];		 
+    u8	     u8ControlStatus;//0为APP控制开关，1为按键控制开关	
+    u8	     u8Pad[2];		 
 }STRU_LED_ONOFF;
 
 u32 g_u32WifiPowerStatus = WIFIPOWEROFF;
 
 extern u8 g_u8MsgBuildBuffer[AC_MESSAGE_MAX_LEN];
 
+/*************************************************
+* Function: AC_BlinkLed
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+ErrorStatus  AC_BlinkLed(unsigned char blink)
+{
+    if (blink)
+	{
+	    GPIO_ResetBits(GPIOA,GPIO_Pin_8); //LED0输出低
+	}
+	else
+    {
+		GPIO_SetBits(GPIOA,GPIO_Pin_8);//LED0输出高
+    }
+    return SUCCESS;
+}
 
 /*************************************************
 * Function: AC_SendDevStatus2Server
@@ -44,17 +66,70 @@ extern u8 g_u8MsgBuildBuffer[AC_MESSAGE_MAX_LEN];
 * Parameter: 
 * History:
 *************************************************/
-void AC_SendLedStatus2Server(void)
+void AC_SendLedBinaryStatus2Server(u8 u8control)
 {
-    STRU_LED_ONOFF struRsp;
+    STRU_LED_ONOFF struReport;
     u16 u16DataLen;
-    struRsp.u8LedOnOff = GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8);
-//    struRsp.u8LedOnOff = struRsp.u8LedOnOff>>2;
-    AC_BuildMessage(MSG_SERVER_CLIENT_GET_LED_STATUS_RSP,0,
-                    (u8*)&struRsp, sizeof(STRU_LED_ONOFF),
+    struReport.u8LedOnOff = GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8);
+    AC_BuildMessage(AC_CODE_BINARY_REPORT,0,
+                    (u8*)&struReport, sizeof(STRU_LED_ONOFF),
                     NULL, 
                     g_u8MsgBuildBuffer, &u16DataLen);
+
     AC_SendMessage(g_u8MsgBuildBuffer, u16DataLen);
+}
+/*************************************************
+* Function: AC_SendLedKlvStatus2Server
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+void AC_SendLedKlvStatus2Server(u8 u8value)
+{
+     /*上报demo灯的状态*/
+    u8 u8LedOnOff ;
+    /*KLV协议内存分配*/
+    AC_KLV *pOut = AC_CreateObj();
+      /*读取demo灯状态*/
+    u8LedOnOff = GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8);
+    /*构造KLV消息*/
+    AC_SetKeyValue(pOut,KEY_LED_ON_OFF,sizeof(u8LedOnOff),INT8_TYPE,&u8LedOnOff);
+    AC_SetKeyValue(pOut,KEY_LED_CONTROL_STATUS,sizeof(u8value),INT8_TYPE,&u8value);
+      /*上报KLV消息*/
+    AC_ReportKLVMessage(AC_CODE_KLV_REPORT, NULL, pOut);
+    /*KLV协议内存释放*/
+    AC_FreeObj(pOut);
+}
+
+/*************************************************
+* Function: AC_SendDevStatus2Server
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+void AC_SendLedJsonStatus2Server(u8 controltype)
+{
+    cJSON *root;
+    char *out;
+    u8 u8LedOnOff;
+    u16 u16DataLen;
+    root=cJSON_CreateObject();
+    u8LedOnOff =  GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8);
+    cJSON_AddNumberToObject(root,"action",		u8LedOnOff);
+    cJSON_AddNumberToObject(root,"controltype",		controltype);
+
+    out=cJSON_Print(root);	
+    cJSON_Delete(root);
+    AC_BuildMessage(AC_CODE_JSON_REPORT,0,
+                    (u8*)out, strlen(out),
+                    NULL, 
+                    g_u8MsgBuildBuffer, &u16DataLen);
+    AC_SendMessage(g_u8MsgBuildBuffer, u16DataLen);	
+    free(out);
 }
 /*************************************************
 * Function: AC_Init
@@ -64,7 +139,7 @@ void AC_SendLedStatus2Server(void)
 * Parameter: 
 * History:
 *************************************************/
-void AC_Init(void)
+void AC_Init()
 {
     u8 u8DevceIdLen = sizeof(DEVICE_ID) -1;
     AC_SendDeviceStart(NULL);
@@ -130,21 +205,23 @@ void AC_DealNotifyMessage(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8
         case AC_CODE_EQ_DONE://wifi模块启动通知
         AC_StoreStatus(WIFIPOWERSTATUS , WIFIPOWERON);
         AC_ConfigWifi();
-        Usart2_Send_Str("Wifi Power On!\n");
+        AC_Printf("Wifi Power On!\n");
         break;
         case AC_CODE_WIFI_CONNECTED://wifi连接成功通知
-        //AC_ConfigWifi();
-        //AC_SendDeviceRegsiter(NULL, g_u8EqVersion,g_u8ModuleKey,g_u64Domain,g_u8DeviceId);
-        AC_SendDeviceRegsiterWithMac(NULL, g_u8EqVersion,g_u8ModuleKey,g_u64Domain,NULL);
-        Usart2_Send_Str("Wifi Connect!\n");
+        //AC_SendDeviceRegsiterWithMac(g_u8EqVersion,g_u8ModuleKey,g_u64Domain);
+        AC_SendDeviceRegsiter(g_u8EqVersion,g_u8ModuleKey,g_u64Domain,g_u8DeviceId);
+        AC_Printf("Wifi Connect!\n");
         break;
-       case AC_CODE_CLOUD_CONNECTED://云端连接通知
+        case AC_CODE_WIFI_DISCONNECTED://云端连接通知
+        AC_Printf("Wifi DisConnect!\n");
+        break;
+        case AC_CODE_CLOUD_CONNECTED://云端连接通知
         AC_StoreStatus(CLOUDSTATUS,CLOUDCONNECT);
-        Usart2_Send_Str("Cloud Connect!\n");
+        AC_Printf("Cloud Connect!\n");
         break;
         case AC_CODE_CLOUD_DISCONNECTED://云端断链通知
         AC_StoreStatus(CLOUDSTATUS,CLOUDDISCONNECT);
-        Usart2_Send_Str("Cloud DisConnect!\n");
+        AC_Printf("Cloud DisConnect!\n");
         break;
     }
 }
@@ -196,7 +273,175 @@ void AC_DealOtaMessage(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *p
     }    
     AC_SendAckMsg(pstruOptList, pstruMsg->MsgId);
 }
+/*************************************************
+* Function: AC_TestKlvMessag
+* Description: 回环测试
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+void AC_TestKlvMessag(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playload)
+{   
+    //回环测试
 
+    AC_KLV *pOut = AC_CreateObj();
+
+    u8 u8out= 0;
+    u16 u16out = 0;
+    u32 u32out = 0;
+    u64 u64out = 0;
+    float f32out = 0;
+    double f64out = 0;
+    u8 stringout[20] = {0};
+    u16 u16length = 0;
+    u8 u8Type = 0;
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),1,NULL,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,1,u16length,u8Type,NULL);
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),2,&u8out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,2,u16length,u8Type,&u8out);
+
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),3,&u8out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,3,u16length,u8Type,&u8out);
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),4,&u16out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,4,u16length,u8Type,&u16out);
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),5,&u32out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,5,u16length,u8Type,&u32out);
+      
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),6,&u64out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,6,u16length,u8Type,&u64out);
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),7,&f32out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,7,u16length,u8Type,&f32out);
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),0,&f64out,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,0,u16length,u8Type,&f64out); 
+    
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),255,stringout,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,255,u16length,u8Type,stringout);
+
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),12,stringout,&u16length,&u8Type);
+    AC_SetKeyValue(pOut,12,u16length,u8Type,stringout);
+    
+    AC_SendKLVMessage(pstruMsg, pstruOptList,pOut);
+    AC_ReportKLVMessage(201, pstruOptList, pOut);
+    AC_FreeObj(pOut);
+}
+
+/*************************************************
+* Function: AC_DealKLVMessage
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+
+void AC_DealBinaryMessage(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playload)
+{
+    u16 u16DataLen;
+    u8 resp[4] = {0};
+    
+    switch (((STRU_LED_ONOFF *)pu8Playload)->u8LedOnOff)
+    {
+        case 0://处理开关消息
+        case 1:        
+        resp[0]=AC_BlinkLed(((STRU_LED_ONOFF *)pu8Playload)->u8LedOnOff);
+        break;            
+        
+    }
+    /*构造消息,接口含义详见下节接口定义*/
+    AC_BuildMessage(CLIENT_SERVER_OK,pstruMsg->MsgId,
+                    (u8*)resp, sizeof(resp),
+                    pstruOptList, 
+                    g_u8MsgBuildBuffer, &u16DataLen);
+    /*发送消息,接口含义详见下节接口定义*/
+    AC_SendMessage(g_u8MsgBuildBuffer, u16DataLen);    
+    
+    AC_SendLedBinaryStatus2Server(KEY_LED_CONTROL_FROMAPP);
+}
+/*************************************************
+* Function: AC_DealKLVMessage
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+void AC_DealKLVMessage(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playload)
+{   
+    //处理KLV控制消息
+    AC_KLV *pOut = AC_CreateObj();
+    u8 u8LedOnOff= 0;
+    u16 u16length = 0;
+    u8 u8Type = 0;
+    ErrorStatus ret = (ErrorStatus)ERROR;
+    AC_GetKeyValue(pu8Playload,AC_HtoNs(pstruMsg->Payloadlen),KEY_LED_ON_OFF,&u8LedOnOff,&u16length,&u8Type);
+    switch (u8LedOnOff)
+    {
+        case 0://处理开关消息
+        case 1:        
+        ret = AC_BlinkLed(u8LedOnOff);
+        break;            
+        
+    }
+    /*构造KLV消息*/
+    AC_SetKeyValue(pOut,KEY_LED_ON_OFF,sizeof(u8LedOnOff),BOOL_TYPE,&ret);
+    /*发送响应消息，用户自定义*/
+    AC_SendKLVMessage(pstruMsg, pstruOptList,pOut);
+    /*KLV协议内存释放*/
+    AC_FreeObj(pOut); 
+    AC_SendLedKlvStatus2Server(KEY_LED_CONTROL_FROMAPP);
+}
+
+
+/*************************************************
+* Function: AC_DealEvent
+* Description: 
+* Author: cxy 
+* Returns: 
+* Parameter: 
+* History:
+*************************************************/
+void AC_DealJsonMessage(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playload)
+{   
+    //处理设备自定义控制消息
+    u16 u16DataLen;
+    u32 u32LedOnOff;
+    ErrorStatus result = (ErrorStatus)ERROR;
+    char *out;
+    cJSON *root;
+    cJSON *format = cJSON_Parse((const char *)pu8Playload);
+    if(format)
+    {
+        u32LedOnOff = cJSON_GetObjectItem(format,"switch")->valueint;
+        switch (u32LedOnOff)
+        {
+            case 0://处理开关消息
+            case 1:        
+            result = AC_BlinkLed(u32LedOnOff);
+            break;
+        }
+        cJSON_Delete(format);
+    }
+    
+    root=cJSON_CreateObject();
+    cJSON_AddBoolToObject(root,"result",result);
+    out=cJSON_Print(root);	
+    cJSON_Delete(root);
+    AC_BuildMessage(AC_CODE_JSON_RSP,pstruMsg->MsgId,
+                    (u8*)out, strlen(out),
+                    NULL, 
+                    g_u8MsgBuildBuffer, &u16DataLen);
+    AC_SendMessage(g_u8MsgBuildBuffer, u16DataLen);	
+    free(out);
+    
+    AC_SendLedJsonStatus2Server(KEY_LED_CONTROL_FROMAPP);
+}
 /*************************************************
 * Function: AC_DealEvent
 * Description: 
@@ -210,11 +455,15 @@ void AC_DealEvent(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Pla
     //处理设备自定义控制消息
     switch(pstruMsg->MsgCode)
     {
-        case MSG_SERVER_CLIENT_SET_LED_ONOFF_REQ:
-        {
-            AC_DealLed(pstruMsg, pstruOptList, pu8Playload);
-        }
+        case AC_CODE_BINARY_LED:
+        AC_DealKLVMessage(pstruMsg, pstruOptList, pu8Playload);
+        break; 
+        case AC_CODE_KLV_LED:
+        AC_DealKLVMessage(pstruMsg, pstruOptList, pu8Playload);
         break;
+        case AC_CODE_JSON_LED:
+        AC_DealJsonMessage(pstruMsg, pstruOptList, pu8Playload);
+        break; 
     }
 }
 
@@ -239,57 +488,7 @@ void AC_StoreStatus(u32 u32Type , u32 u32Data)
         break;
     }
 }
-/*************************************************
-* Function: AC_BlinkLed
-* Description: 
-* Author: cxy 
-* Returns: 
-* Parameter: 
-* History:
-*************************************************/
-void AC_BlinkLed(unsigned char blink)
-{
-	if (blink)
-	{
-	    GPIO_ResetBits(GPIOA,GPIO_Pin_8); //LED0输出低
-	}
-	else
-    {
-		GPIO_SetBits(GPIOA,GPIO_Pin_8);//LED0输出高
-    }
-	
 
-}
-/*************************************************
-* Function: AC_DealLed
-* Description: 
-* Author: cxy 
-* Returns: 
-* Parameter: 
-* History:
-*************************************************/
-void AC_DealLed(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playload)
-{
-
-    u16 u16DataLen;
-    u8 test[] = "hello";
-
-    switch (((STRU_LED_ONOFF *)pu8Playload)->u8LedOnOff)
-    {
-        case 0://处理开关消息
-        case 1:        
-            AC_BlinkLed(((STRU_LED_ONOFF *)pu8Playload)->u8LedOnOff);
-        break;            
-        
-    }
-    AC_BuildMessage(CLIENT_SERVER_OK,pstruMsg->MsgId,
-                    (u8*)test, 5,
-                    pstruOptList, 
-                    g_u8MsgBuildBuffer, &u16DataLen);
-    AC_SendMessage(g_u8MsgBuildBuffer, u16DataLen);
-
-    
-}
 /*************************************************
 * Function: AC_DealEvent
 * Description: 
@@ -300,23 +499,13 @@ void AC_DealLed(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Playl
 *************************************************/
 u32 AC_GetStoreStatus(u32 u32Type)
 {
-	u32	mid_redata;
-	switch(u32Type)
-	{
-			case CLOUDSTATUS:
-			{
-				mid_redata = g_u32CloudStatus;
-			}
-			break;
-			case WIFIPOWERSTATUS:
-			{
-				mid_redata = g_u32WifiPowerStatus;
-			}
-			break;
-			default:
-				mid_redata = AC_RET_ERROR;
-			break;
-	}
-	return mid_redata;
+    switch(u32Type)
+    {
+        case CLOUDSTATUS:
+        return g_u32CloudStatus;
+        case WIFIPOWERSTATUS:
+        return g_u32WifiPowerStatus;
+    }
+   return AC_RET_ERROR;
 }
 

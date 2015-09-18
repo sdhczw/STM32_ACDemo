@@ -349,9 +349,9 @@
             <uSurpInc>0</uSurpInc>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_STDPERIPH_DRIVER,STM32F10X_MD</Define>
+              <Define>USE_STDPERIPH_DRIVER,STM32F10X_MD KLV_SUPPORT xJSON_SUPPORT xBINARY_SUPPORT</Define>
               <Undefine></Undefine>
-              <IncludePath>..\User;..\Libraries\STM32F10x_StdPeriph_Driver\inc;..\Libraries\CMSIS\CM3\CoreSupport;..\Libraries\CMSIS\CM3\DeviceSupport\ST\STM32F10x;..\User\ac</IncludePath>
+              <IncludePath>..\User;..\Libraries\STM32F10x_StdPeriph_Driver\inc;..\Libraries\CMSIS\CM3\CoreSupport;..\Libraries\CMSIS\CM3\DeviceSupport\ST\STM32F10x;..\User\ac;..\User\klv;..\User\cJSON</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -441,6 +441,16 @@
               <FileName>crc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\User\ac\crc.c</FilePath>
+            </File>
+            <File>
+              <FileName>ac_klv.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\klv\ac_klv.c</FilePath>
+            </File>
+            <File>
+              <FileName>cJSON.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\cJSON\cJSON.c</FilePath>
             </File>
           </Files>
         </Group>

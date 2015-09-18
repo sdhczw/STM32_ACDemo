@@ -4,11 +4,11 @@
 #include "key.h"
 #include "delay_y.h"
 
-#include "ac_common.h"
+//#include "ac_common.h"
 #include "ac_hal.h"
 #include "ac_cfg.h"
 vu32  g_vu32Key = 0;
-
+extern ErrorStatus  AC_BlinkLed(unsigned char blink);
 
 //按键初始化函数 
 //PA15和PC5设置成输入
@@ -81,6 +81,12 @@ void EXTI9_5_IRQHandler(void)
 		delay_ms(10);
 		g_vu32Key=!g_vu32Key;
 		AC_BlinkLed(g_vu32Key);		
-		AC_SendLedStatus2Server();
+#if (defined(JSON_SUPPORT))        
+        AC_SendLedJsonStatus2Server(KEY_LED_CONTROL_FROMSWITCH);
+#elif (defined(BINARY_SUPPORT))  
+        AC_SendLedBinaryStatus2Server(KEY_LED_CONTROL_FROMSWITCH);
+#else
+        AC_SendLedKlvStatus2Server(KEY_LED_CONTROL_FROMSWITCH);
+#endif
 	}
 }

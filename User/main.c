@@ -6,7 +6,6 @@
 #include "delay_y.h"	
 
 /*AbleCloud*/
-#include "ac_common.h"
 #include "ac_hal.h"
 
 	/*设置中断优先级分组*/
