@@ -456,7 +456,7 @@ void AC_DealEvent(AC_MessageHead *pstruMsg, AC_OptList *pstruOptList, u8 *pu8Pla
     switch(pstruMsg->MsgCode)
     {
         case AC_CODE_BINARY_LED:
-        AC_DealKLVMessage(pstruMsg, pstruOptList, pu8Playload);
+        AC_DealBinaryMessage(pstruMsg, pstruOptList, pu8Playload);
         break; 
         case AC_CODE_KLV_LED:
         AC_DealKLVMessage(pstruMsg, pstruOptList, pu8Playload);
